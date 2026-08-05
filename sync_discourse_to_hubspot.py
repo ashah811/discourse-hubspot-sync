@@ -259,7 +259,7 @@ def main():
     print(f"Found {len(users)} total Discourse users")
 
     if last_sync:
-        users = [u for u in users if u.get("last_seen_at", "") > last_sync]
+        users = [u for u in users if (u.get("last_seen_at") or "") > last_sync]
         print(f"{len(users)} updated since last sync")
 
     contacts = [c for c in (to_hubspot_contact(u) for u in users) if c]
