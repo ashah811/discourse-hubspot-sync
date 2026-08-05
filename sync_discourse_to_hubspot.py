@@ -201,6 +201,47 @@ def batch_upsert(contacts_batch):
     return resp.json()
 
 
+def find_contact_ids_by_email(emails):
+    """Look up HubSpot contact IDs for a list of emails. Emails with no
+    matching contact are simply omitted from the result (not an error)."""
+    ids = []
+    for batch in chunk(emails):
+        resp = requests.post(
+            "https://api.hubapi.com/crm/v3/objects/contacts/batch/read",
+            headers=HUBSPOT_HEADERS,
+            json={
+                "idProperty": "email",
+                "inputs": [{"id": email} for email in batch],
+            },
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            print(f"  Lookup error ({resp.status_code}): {resp.text[:500]}")
+            continue
+        results = resp.json().get("results", [])
+        ids.extend(r["id"] for r in results)
+        time.sleep(0.2)
+    return ids
+
+
+def batch_archive(contact_ids):
+    """Archive (soft-delete) contacts in HubSpot. Recoverable for 90 days."""
+    total_archived = 0
+    for batch in chunk(contact_ids):
+        resp = requests.post(
+            "https://api.hubapi.com/crm/v3/objects/contacts/batch/archive",
+            headers=HUBSPOT_HEADERS,
+            json={"inputs": [{"id": cid} for cid in batch]},
+            timeout=30,
+        )
+        if resp.status_code >= 400:
+            print(f"  Archive error ({resp.status_code}): {resp.text[:500]}")
+            continue
+        total_archived += len(batch)
+        time.sleep(0.2)
+    return total_archived
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -224,7 +265,7 @@ def main():
     contacts = [c for c in (to_hubspot_contact(u) for u in users) if c]
     skipped = len(users) - len(contacts)
     if skipped:
-        print(f"Skipping {skipped} users with no email on file")
+        print(f"Skipping {skipped} users (suspended, placeholder, or shadow accounts)")
 
     print(f"Syncing {len(contacts)} contacts to HubSpot...")
 
@@ -235,6 +276,21 @@ def main():
         total_errors += len(errors)
         print(f"  Batch {i + 1}: {len(batch)} contacts synced, {len(errors)} errors")
         time.sleep(0.2)  # HubSpot rate limit courtesy
+
+    # --- Archive suspended users' contacts in HubSpot ---
+    suspended_emails = [
+        u.get("email")
+        for u in users
+        if u.get("suspended_till") and is_real_email(u.get("email")) and not is_shadow_anon_account(u)
+    ]
+    if suspended_emails:
+        print(f"Checking {len(suspended_emails)} suspended users against HubSpot...")
+        contact_ids = find_contact_ids_by_email(suspended_emails)
+        if contact_ids:
+            archived = batch_archive(contact_ids)
+            print(f"Archived {archived} suspended contacts in HubSpot")
+        else:
+            print("No matching HubSpot contacts found for suspended users")
 
     set_last_sync(run_started_at)
     print(f"Done. {len(contacts)} synced, {total_errors} errors. State saved to {STATE_FILE}.")
