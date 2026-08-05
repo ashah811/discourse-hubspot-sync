@@ -21,6 +21,7 @@ Optional:
 
 import json
 import os
+import re
 import time
 from datetime import datetime, timezone
 
@@ -124,6 +125,9 @@ def get_user_email(user_id):
 # ---------------------------------------------------------------------------
 # Transform
 # ---------------------------------------------------------------------------
+ANON_SHADOW_USERNAME = re.compile(r"^anon(ymous)?\d+$", re.IGNORECASE)
+
+
 def is_real_email(email):
     """Filter out Discourse's placeholder emails for deleted/anonymized/system accounts."""
     if not email or email in ("no_email", "discobot_email"):
@@ -133,9 +137,22 @@ def is_real_email(email):
     return True
 
 
+def is_shadow_anon_account(user):
+    """Filter out Discourse's anonymous-posting-mode shadow accounts.
+
+    These are auto-generated stand-in accounts (usernames like 'anonymous10'
+    or 'anon111105') tied to a real user who posted anonymously — not
+    distinct people, so they shouldn't be synced as separate contacts.
+    """
+    username = user.get("username", "")
+    return bool(ANON_SHADOW_USERNAME.match(username))
+
+
 def to_hubspot_contact(user):
     email = user.get("email")
     if not is_real_email(email):
+        return None
+    if is_shadow_anon_account(user):
         return None
 
     name = (user.get("name") or "").strip()
