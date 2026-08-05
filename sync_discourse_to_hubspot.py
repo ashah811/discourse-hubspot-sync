@@ -124,9 +124,18 @@ def get_user_email(user_id):
 # ---------------------------------------------------------------------------
 # Transform
 # ---------------------------------------------------------------------------
+def is_real_email(email):
+    """Filter out Discourse's placeholder emails for deleted/anonymized accounts."""
+    if not email or email == "no_email":
+        return False
+    if email.endswith("@anonymized.invalid"):
+        return False
+    return True
+
+
 def to_hubspot_contact(user):
     email = user.get("email")
-    if not email:
+    if not is_real_email(email):
         return None
 
     name = (user.get("name") or "").strip()
