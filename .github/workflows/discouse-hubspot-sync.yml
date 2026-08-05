@@ -1,0 +1,50 @@
+# Save this file as .github/workflows/discourse-hubspot-sync.yml in your repo.
+#
+# Required repo secrets (Settings > Secrets and variables > Actions):
+#   DISCOURSE_URL
+#   DISCOURSE_API_KEY
+#   DISCOURSE_API_USERNAME
+#   HUBSPOT_TOKEN
+#
+# Runs daily at 6am UTC, and can also be triggered manually from the Actions tab.
+
+name: Discourse to HubSpot Sync
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write  # needed to commit last_sync.json back to the repo
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run sync
+        env:
+          DISCOURSE_URL: ${{ secrets.DISCOURSE_URL }}
+          DISCOURSE_API_KEY: ${{ secrets.DISCOURSE_API_KEY }}
+          DISCOURSE_API_USERNAME: ${{ secrets.DISCOURSE_API_USERNAME }}
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: python sync_discourse_to_hubspot.py
+
+      - name: Commit updated sync state
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add last_sync.json
+          git diff --staged --quiet || git commit -m "Update last_sync timestamp"
+          git push
