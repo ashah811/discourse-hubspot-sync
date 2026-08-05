@@ -68,14 +68,20 @@ def set_last_sync(ts):
 # Discourse
 # ---------------------------------------------------------------------------
 def get_all_discourse_users():
-    """Paginate through all active Discourse users."""
+    """Paginate through all active Discourse users.
+
+    The bulk list endpoint doesn't reliably return the email field for
+    every user (a known Discourse API quirk), even with an admin key and
+    show_emails=true. So after the bulk pull, any user missing an email
+    gets a follow-up per-user call that does reliably include it.
+    """
     users = []
     page = 0
     while True:
         resp = requests.get(
             f"{DISCOURSE_URL}/admin/users/list/active.json",
             headers=DISCOURSE_HEADERS,
-            params={"page": page},
+            params={"page": page, "show_emails": "true"},
             timeout=30,
         )
         resp.raise_for_status()
@@ -85,7 +91,34 @@ def get_all_discourse_users():
         users.extend(batch)
         page += 1
         time.sleep(0.5)  # be polite to Discourse's rate limits
+
+    missing_email = [u for u in users if not u.get("email")]
+    if missing_email:
+        print(
+            f"{len(missing_email)} users missing email from bulk list — "
+            f"fetching individually..."
+        )
+        for i, user in enumerate(missing_email):
+            email = get_user_email(user["id"])
+            if email:
+                user["email"] = email
+            if (i + 1) % 50 == 0:
+                print(f"  ...fetched {i + 1}/{len(missing_email)}")
+            time.sleep(0.3)  # per-user calls add up, stay polite to rate limits
+
     return users
+
+
+def get_user_email(user_id):
+    """Fetch a single user's record, which reliably includes email."""
+    resp = requests.get(
+        f"{DISCOURSE_URL}/admin/users/{user_id}.json",
+        headers=DISCOURSE_HEADERS,
+        timeout=30,
+    )
+    if resp.status_code != 200:
+        return None
+    return resp.json().get("email")
 
 
 # ---------------------------------------------------------------------------
