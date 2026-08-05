@@ -148,11 +148,18 @@ def is_shadow_anon_account(user):
     return bool(ANON_SHADOW_USERNAME.match(username))
 
 
+def is_active_account(user):
+    """Only pull in accounts that are not currently suspended."""
+    return not user.get("suspended_till")
+
+
 def to_hubspot_contact(user):
     email = user.get("email")
     if not is_real_email(email):
         return None
     if is_shadow_anon_account(user):
+        return None
+    if not is_active_account(user):
         return None
 
     name = (user.get("name") or "").strip()
