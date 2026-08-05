@@ -39,6 +39,7 @@ jobs:
           DISCOURSE_API_KEY: ${{ secrets.DISCOURSE_API_KEY }}
           DISCOURSE_API_USERNAME: ${{ secrets.DISCOURSE_API_USERNAME }}
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+          HUBSPOT_DISCOURSE_PROPERTY: ${{ secrets.HUBSPOT_DISCOURSE_PROPERTY }}
         run: python sync_discourse_to_hubspot.py
 
       - name: Commit updated sync state
