@@ -125,8 +125,8 @@ def get_user_email(user_id):
 # Transform
 # ---------------------------------------------------------------------------
 def is_real_email(email):
-    """Filter out Discourse's placeholder emails for deleted/anonymized accounts."""
-    if not email or email == "no_email":
+    """Filter out Discourse's placeholder emails for deleted/anonymized/system accounts."""
+    if not email or email in ("no_email", "discobot_email"):
         return False
     if email.endswith("@anonymized.invalid"):
         return False
